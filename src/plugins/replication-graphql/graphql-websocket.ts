@@ -19,7 +19,7 @@ export function getGraphQLWebSocket(
     headers?: { [k: string]: string; },
     options: RxGraphQLPullWSOptions = {},
 ): Client {
-
+    console.log('HELLO WORLD!!!!!')
     const has = getFromMapOrCreate(
         GRAPHQL_WEBSOCKET_BY_URL,
         url,

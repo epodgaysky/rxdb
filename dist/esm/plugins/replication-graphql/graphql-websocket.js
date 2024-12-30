@@ -6,6 +6,7 @@ var {
 } = ws;
 export var GRAPHQL_WEBSOCKET_BY_URL = new Map();
 export function getGraphQLWebSocket(url, headers, options = {}) {
+  console.log('HELLO WORLD!!!!!');
   var has = getFromMapOrCreate(GRAPHQL_WEBSOCKET_BY_URL, url, () => {
     var wsClient = createClient({
       ...options,
