@@ -334,7 +334,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
             );
 
             const writeRowsToMaster: ById<RxReplicationWriteToMasterRow<RxDocType>> = {};
-            const result: ById<{ newDoc: WithDeleted<RxDocType>; assumedMasterDoc: WithDeleted<RxDocType>; isResolvedConflictCondition: boolean; }> = {};
+            const result: ById<{ newDoc: WithDeleted<RxDocType>; assumedMasterDoc: WithDeleted<RxDocType> | {}; isResolvedConflictCondition: boolean; }> = {};
             const writeRowsToMasterIds: string[] = [];
             const writeRowsToMeta: BulkWriteRowById<RxStorageReplicationMeta<RxDocType, any>> = {};
             const forkStateById: ById<RxDocumentData<RxDocType>> = {};
