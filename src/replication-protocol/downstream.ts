@@ -51,11 +51,15 @@ import {
 export async function startReplicationDownstream<RxDocType, CheckpointType = any>(
     state: RxStorageInstanceReplicationState<RxDocType>
 ) {
+    console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: startReplicationDownstream: `, state);
+
     if (
         state.input.initialCheckpoint &&
         state.input.initialCheckpoint.downstream
     ) {
         const checkpointDoc = await getLastCheckpointDoc(state, 'down');
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: startReplicationDownstream checkpointDoc: `, checkpointDoc);
+
         if (!checkpointDoc) {
             await setCheckpoint(
                 state,
@@ -86,9 +90,11 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
             time: timer++,
             task
         };
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask: `, taskWithTime);
         openTasks.push(taskWithTime);
         state.streamQueue.down = state.streamQueue.down
             .then(() => {
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask state.streamQueue openTasks: `, openTasks);
                 const useTasks: Task[] = [];
                 while (openTasks.length > 0) {
                     state.events.active.down.next(true);
@@ -113,21 +119,28 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
 
                     useTasks.push(innerTaskWithTime.task);
                 }
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask state.streamQueue useTasks: `, useTasks);
+
                 if (useTasks.length === 0) {
+                    console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask no tasks, returning: `);
                     return;
                 }
 
                 if (useTasks[0] === 'RESYNC') {
+                    console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask RESYNC: `, useTasks);
                     return downstreamResyncOnce();
                 } else {
+                    console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask() downstreamProcessChanges() : `, useTasks);
                     return downstreamProcessChanges(useTasks);
                 }
             }).then(() => {
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask() state.events.active.down: false : `);
                 state.events.active.down.next(false);
                 if (
                     !state.firstSyncDone.down.getValue() &&
                     !state.events.canceled.getValue()
                 ) {
+                    console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: addNewTask() state.firstSyncDone.down: true : `);
                     state.firstSyncDone.down.next(true);
                 }
             });
@@ -156,6 +169,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
             )
             .subscribe((task: Task) => {
                 state.stats.down.masterChangeStreamEmit = state.stats.down.masterChangeStreamEmit + 1;
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: replicationHandler.masterChangeStream$ addNewTask() task: `, task);
                 addNewTask(task);
             });
         // unsubscribe when replication is canceled
@@ -163,7 +177,10 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
             state.events.canceled.pipe(
                 filter(canceled => !!canceled)
             )
-        ).then(() => sub.unsubscribe());
+        ).then(() => {
+            console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: state.events.canceled got cancelled true: `);
+            return sub.unsubscribe();
+        });
     }
 
 
@@ -174,13 +191,14 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
     let lastTimeMasterChangesRequested: number = -1;
     async function downstreamResyncOnce() {
         state.stats.down.downstreamResyncOnce = state.stats.down.downstreamResyncOnce + 1;
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamResyncOnce() start: `, lastTimeMasterChangesRequested);
         if (state.events.canceled.getValue()) {
             return;
         }
 
         state.checkpointQueue = state.checkpointQueue.then(() => getLastCheckpointDoc(state, 'down'));
         let lastCheckpoint: CheckpointType = await state.checkpointQueue;
-
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamResyncOnce() lastCheckpoint: `, lastCheckpoint);
 
         const promises: Promise<any>[] = [];
         while (!state.events.canceled.getValue()) {
@@ -189,12 +207,14 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                 lastCheckpoint,
                 state.input.pullBatchSize
             );
+            console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamResyncOnce() loop downResult: `, downResult);
 
             if (downResult.documents.length === 0) {
                 break;
             }
 
             lastCheckpoint = stackCheckpoints([lastCheckpoint, downResult.checkpoint]);
+            console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamResyncOnce() loop lastCheckpoint: `, lastCheckpoint);
 
             promises.push(
                 persistFromMaster(
@@ -213,12 +233,14 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
             }
 
         }
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamResyncOnce() awaiting all the downResults`);
         await Promise.all(promises);
     }
 
 
     function downstreamProcessChanges(tasks: Task[]) {
         state.stats.down.downstreamProcessChanges = state.stats.down.downstreamProcessChanges + 1;
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamProcessChanges() start: `, state.stats.down.downstreamProcessChanges);
         const docsOfAllTasks: WithDeleted<RxDocType>[] = [];
         let lastCheckpoint: CheckpointType | undefined = null as any;
 
@@ -229,6 +251,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
             appendToArray(docsOfAllTasks, task.documents);
             lastCheckpoint = stackCheckpoints([lastCheckpoint, task.checkpoint]);
         });
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: downstreamProcessChanges() persistFromMaster(): `, docsOfAllTasks, lastCheckpoint);
         return persistFromMaster(
             docsOfAllTasks,
             ensureNotFalsy(lastCheckpoint)
@@ -258,6 +281,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
     ): Promise<void> {
         const primaryPath = state.primaryPath;
         state.stats.down.persistFromMaster = state.stats.down.persistFromMaster + 1;
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: persistFromMaster() start: `, state.stats.down.persistFromMaster);
 
         /**
          * Add the new docs to the non-persistent list
@@ -272,6 +296,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
          * Run in the queue
          * with all open documents from nonPersistedFromMaster.
          */
+        console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: persistFromMaster() nonPersistedFromMaster: `, nonPersistedFromMaster);
         persistenceQueue = persistenceQueue.then(() => {
 
             const downDocsById: ById<WithDeletedAndAttachments<RxDocType>> = nonPersistedFromMaster.docs;
@@ -283,6 +308,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                 state.events.canceled.getValue() ||
                 docIds.length === 0
             ) {
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: persistFromMaster() persistenceQueue no docs to write`);
                 return PROMISE_RESOLVE_VOID;
             }
 
@@ -301,6 +327,8 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                 currentForkStateList,
                 assumedMasterState
             ]) => {
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: persistFromMaster() persistenceQueue currentForkStateList: `, currentForkStateList);
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: persistFromMaster() persistenceQueue assumedMasterState: `, assumedMasterState);
                 const currentForkState = new Map<string, RxDocumentData<RxDocType>>();
                 currentForkStateList.forEach(doc => currentForkState.set((doc as any)[primaryPath], doc));
                 return Promise.all(
@@ -459,6 +487,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                     })
                 );
             }).then(async () => {
+                console.log(`[RXDB_${state.input.forkInstance.collectionName}_DOWNSTREAM]: persistFromMaster() persistenceQueue then writeRowsToFork: `, writeRowsToFork);
                 if (writeRowsToFork.length > 0) {
                     return state.input.forkInstance.bulkWrite(
                         writeRowsToFork,

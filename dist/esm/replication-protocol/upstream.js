@@ -50,12 +50,19 @@ export async function startReplicationUpstream(state) {
       task: eventBulk,
       time: timer++
     });
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: forkInstance changeStream openTasks: ", openTasks);
     if (!state.events.active.up.getValue()) {
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: forkInstance changeStream active!");
       state.events.active.up.next(true);
     }
     if (state.input.waitBeforePersist) {
-      return state.input.waitBeforePersist().then(() => processTasks());
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: forkInstance changeStream waitBeforePersist: ", openTasks);
+      return state.input.waitBeforePersist().then(() => {
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: forkInstance changeStream waitBeforePersist processTasks: ", openTasks);
+        return processTasks();
+      });
     } else {
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: forkInstance changeStream processTasks: ", openTasks);
       return processTasks();
     }
   });
@@ -64,15 +71,18 @@ export async function startReplicationUpstream(state) {
       task: 'RESYNC',
       time: timer++
     });
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: replicationHandler masterChangeStream$ RESYNC processTasks: ", openTasks);
     processTasks();
   });
 
   // unsubscribe when replication is canceled
   firstValueFrom(state.events.canceled.pipe(filter(canceled => !!canceled))).then(() => {
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM]: cancelling replication!");
     sub.unsubscribe();
     subResync.unsubscribe();
   });
   async function upstreamInitialSync() {
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] upstreamInitialSync start: ");
     state.stats.up.upstreamInitialSync = state.stats.up.upstreamInitialSync + 1;
     if (state.events.canceled.getValue()) {
       return;
@@ -80,6 +90,7 @@ export async function startReplicationUpstream(state) {
     state.checkpointQueue = state.checkpointQueue.then(() => getLastCheckpointDoc(state, 'up'));
     var lastCheckpoint = await state.checkpointQueue;
     var promises = new Set();
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] upstreamInitialSync before loop lastCheckpoint: ", lastCheckpoint);
     var _loop = async function () {
       initialSyncStartTime = timer++;
 
@@ -94,10 +105,12 @@ export async function startReplicationUpstream(state) {
         await Promise.race(Array.from(promises));
       }
       var upResult = await getChangedDocumentsSince(state.input.forkInstance, state.input.pushBatchSize, lastCheckpoint);
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] upstreamInitialSync upResult.documents: ", upResult.documents);
       if (upResult.documents.length === 0) {
         return 1; // break
       }
       lastCheckpoint = stackCheckpoints([lastCheckpoint, upResult.checkpoint]);
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] upstreamInitialSync persist to master: ", upResult.documents, lastCheckpoint);
       var promise = persistToMaster(upResult.documents, ensureNotFalsy(lastCheckpoint));
       promises.add(promise);
       promise.catch().then(() => promises.delete(promise));
@@ -114,8 +127,10 @@ export async function startReplicationUpstream(state) {
     var resolvedPromises = await Promise.all(promises);
     var hadConflicts = resolvedPromises.find(r => !!r);
     if (hadConflicts) {
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] upstreamInitialSync conflicts!");
       await upstreamInitialSync();
     } else if (!state.firstSyncDone.up.getValue() && !state.events.canceled.getValue()) {
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] upstreamInitialSync firstSyncDone!");
       state.firstSyncDone.up.next(true);
     }
   }
@@ -128,6 +143,7 @@ export async function startReplicationUpstream(state) {
       state.events.active.up.next(false);
       return;
     }
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks() openTasks: ", openTasks);
     state.stats.up.processTasks = state.stats.up.processTasks + 1;
     state.events.active.up.next(true);
     state.streamQueue.up = state.streamQueue.up.then(async () => {
@@ -143,12 +159,13 @@ export async function startReplicationUpstream(state) {
          * has run, we can ignore the task because the initial sync already processed
          * these documents.
          */
-        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] incoming task: ", taskWithTime);
-        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] initialSyncStartTime: ", initialSyncStartTime);
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks() loop incoming task: ", taskWithTime);
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks() loop initialSyncStartTime: ", initialSyncStartTime);
         if (taskWithTime.time < initialSyncStartTime) {
           continue;
         }
         if (taskWithTime.task === 'RESYNC') {
+          console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks() loop RESYNC: ", initialSyncStartTime);
           state.events.active.up.next(false);
           await upstreamInitialSync();
           return;
@@ -171,12 +188,15 @@ export async function startReplicationUpstream(state) {
         }
         checkpoint = stackCheckpoints([checkpoint, taskWithTime.task.checkpoint]);
       }
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks persist to master: ", docs, checkpoint);
       await persistToMaster(docs, checkpoint);
 
       // might have got more tasks while running persistToMaster()
       if (openTasks.length === 0) {
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks() events.active.up: false ", initialSyncStartTime);
         state.events.active.up.next(false);
       } else {
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] processTasks() processTasks() ", initialSyncStartTime);
         return processTasks();
       }
     });
@@ -187,6 +207,8 @@ export async function startReplicationUpstream(state) {
    * false if not.
    */
   function persistToMaster(docs, checkpoint) {
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() start docs: ", docs);
+    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() start checkpoint: ", checkpoint);
     state.stats.up.persistToMaster = state.stats.up.persistToMaster + 1;
 
     /**
@@ -214,6 +236,7 @@ export async function startReplicationUpstream(state) {
        * these documents from the storage again when the replication is restarted.
        */
       function rememberCheckpointBeforeReturn() {
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() rememberCheckpointBeforeReturn(): ", checkpoint);
         return setCheckpoint(state, 'up', useCheckpoint);
       }
       ;
@@ -222,11 +245,13 @@ export async function startReplicationUpstream(state) {
         return false;
       }
       var assumedMasterState = await getAssumedMasterState(state, docIds);
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() persistenceQueue assumedMasterState: ", assumedMasterState);
       var writeRowsToMaster = {};
       var result = {};
       var writeRowsToMasterIds = [];
       var writeRowsToMeta = {};
       var forkStateById = {};
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster: ", docIds);
       await Promise.all(docIds.map(async docId => {
         var fullDocData = upDocsById[docId];
         forkStateById[docId] = fullDocData;
@@ -285,6 +310,7 @@ export async function startReplicationUpstream(state) {
        * called with more documents than what the batchSize limits.
        */
       var writeBatches = batchArray(writeRowsArray, state.input.pushBatchSize);
+      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() persistenceQueue writeBatches: ", writeBatches);
       await Promise.all(writeBatches.map(async writeBatch => {
         // enhance docs with attachments
         if (state.hasAttachments) {
@@ -310,6 +336,7 @@ export async function startReplicationUpstream(state) {
         return false;
       }
       if (useWriteRowsToMeta.length > 0) {
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() metaInstance.bulkWrite() useWriteRowsToMeta: ", stripAttachmentsDataFromMetaWriteRows(state, useWriteRowsToMeta));
         await state.input.metaInstance.bulkWrite(stripAttachmentsDataFromMetaWriteRows(state, useWriteRowsToMeta), 'replication-up-write-meta');
         // TODO what happens when we have conflicts here?
       }
@@ -322,6 +349,7 @@ export async function startReplicationUpstream(state) {
        */
       var hadConflictWrites = false;
       if (conflictIds.size > 0) {
+        console.log("[RXDB_" + state.input.forkInstance.collectionName + "_UPSTREAM] persistToMaster() conflicts!!!: ", conflictIds);
         state.stats.up.persistToMasterHadConflicts = state.stats.up.persistToMasterHadConflicts + 1;
         var conflictWriteFork = [];
         var conflictWriteMeta = {};
