@@ -40,8 +40,8 @@ export async function startReplicationUpstream(state) {
   };
   var sub = state.input.forkInstance.changeStream().subscribe(eventBulk => {
     var isPaused = state.events.paused.getValue();
-    console.log('[RXDB_UPSTREAM]: forkInstance changeStream isPaused: ', isPaused);
-    console.log('[RXDB_UPSTREAM]: forkInstance changeStream: ', eventBulk);
+    console.log("[RXDB_UPSTREAM]: " + state.input.forkInstance.collectionName + " forkInstance changeStream isPaused: ", isPaused);
+    console.log("[RXDB_UPSTREAM]: " + state.input.forkInstance.collectionName + " forkInstance changeStream: ", eventBulk);
     if (isPaused) {
       return;
     }
@@ -143,8 +143,8 @@ export async function startReplicationUpstream(state) {
          * has run, we can ignore the task because the initial sync already processed
          * these documents.
          */
-        console.log('[RXDB_UPSTREAM] incoming task: ', taskWithTime);
-        console.log('[RXDB_UPSTREAM] initialSyncStartTime: ', initialSyncStartTime);
+        console.log("[RXDB_UPSTREAM] " + state.input.forkInstance.collectionName + " incoming task: ", taskWithTime);
+        console.log("[RXDB_UPSTREAM] " + state.input.forkInstance.collectionName + " initialSyncStartTime: ", initialSyncStartTime);
         if (taskWithTime.time < initialSyncStartTime) {
           continue;
         }
@@ -161,10 +161,10 @@ export async function startReplicationUpstream(state) {
          * to have the correct checkpoint set.
          */
         var currentStateContext = await state.downstreamBulkWriteFlag;
-        console.log('[RXDB_UPSTREAM] taskWithTime context: ', taskWithTime);
-        console.log('[RXDB_UPSTREAM] currentStateContext context: ', currentStateContext);
+        console.log("[RXDB_UPSTREAM] " + state.input.forkInstance.collectionName + " taskWithTime context: ", taskWithTime);
+        console.log("[RXDB_UPSTREAM] " + state.input.forkInstance.collectionName + " currentStateContext context: ", currentStateContext);
         if (taskWithTime.task.context !== currentStateContext) {
-          console.log('[RXDB_UPSTREAM] appending docs from task for persisting to master: ', taskWithTime);
+          console.log("[RXDB_UPSTREAM] " + state.input.forkInstance.collectionName + " appending docs from task for persisting to master: ", taskWithTime);
           appendToArray(docs, taskWithTime.task.events.map(r => {
             return r.documentData;
           }));
@@ -391,7 +391,7 @@ export async function startReplicationUpstream(state) {
        * but to ensure order on parallel checkpoint writes,
        * we have to use a queue.
        */
-      console.log('[RXDB_UPSTREAM] UPSTREAM WRITTEN DOCUMENTS: ', writeRowsToMaster);
+      console.log("[RXDB_UPSTREAM]: " + state.input.forkInstance.collectionName + " UPSTREAM WRITTEN DOCUMENTS: ", writeRowsToMaster);
       rememberCheckpointBeforeReturn();
       return hadConflictWrites;
     }).catch(unhandledError => {

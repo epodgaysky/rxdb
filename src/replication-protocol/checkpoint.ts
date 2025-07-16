@@ -53,8 +53,8 @@ export async function setCheckpoint<RxDocType, CheckpointType>(
     checkpoint: CheckpointType
 ) {
     state.checkpointQueue = state.checkpointQueue.then(async () => {
-        console.log(`[RXDB_${direction.toUpperCase()}STREAM] setCheckpoint PREVIOUS CHECKPOINT: `, state.lastCheckpointDoc.up);
-        console.log(`[RXDB_${direction.toUpperCase()}STREAM] setCheckpoint CURRENT CHECKPOINT: `, checkpoint);
+        console.log(`[RXDB_${direction.toUpperCase()}STREAM] ${state.input.forkInstance.collectionName} setCheckpoint PREVIOUS CHECKPOINT: `, state.lastCheckpointDoc.up);
+        console.log(`[RXDB_${direction.toUpperCase()}STREAM] ${state.input.forkInstance.collectionName} setCheckpoint CURRENT CHECKPOINT: `, checkpoint);
 
         let previousCheckpointDoc = state.lastCheckpointDoc[direction];
         if (
@@ -76,7 +76,7 @@ export async function setCheckpoint<RxDocType, CheckpointType>(
                 JSON.stringify(previousCheckpointDoc.checkpointData) !== JSON.stringify(checkpoint)
             )
         ) {
-            console.log(`[RXDB_${direction.toUpperCase()}STREAM] setCheckpoint WRITING CHECKPOINT: `, checkpoint);
+            console.log(`[RXDB_${direction.toUpperCase()}STREAM] ${state.input.forkInstance.collectionName} setCheckpoint WRITING CHECKPOINT: `, checkpoint);
 
             const newDoc: RxDocumentData<RxStorageReplicationMeta<RxDocType, CheckpointType>> = {
                 id: '',
