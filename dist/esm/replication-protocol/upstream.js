@@ -39,7 +39,10 @@ export async function startReplicationUpstream(state) {
     docs: {}
   };
   var sub = state.input.forkInstance.changeStream().subscribe(eventBulk => {
-    if (state.events.paused.getValue()) {
+    var isPaused = state.events.paused.getValue();
+    console.log('[RXDB_UPSTREAM]: forkInstance changeStream isPaused: ', isPaused);
+    console.log('[RXDB_UPSTREAM]: forkInstance changeStream: ', eventBulk);
+    if (isPaused) {
       return;
     }
     state.stats.up.forkChangeStreamEmit = state.stats.up.forkChangeStreamEmit + 1;
@@ -140,6 +143,8 @@ export async function startReplicationUpstream(state) {
          * has run, we can ignore the task because the initial sync already processed
          * these documents.
          */
+        console.log('[RXDB_UPSTREAM] incoming task: ', taskWithTime);
+        console.log('[RXDB_UPSTREAM] initialSyncStartTime: ', initialSyncStartTime);
         if (taskWithTime.time < initialSyncStartTime) {
           continue;
         }
@@ -155,7 +160,11 @@ export async function startReplicationUpstream(state) {
          * But even if they can be ignored, we later have to call persistToMaster()
          * to have the correct checkpoint set.
          */
-        if (taskWithTime.task.context !== (await state.downstreamBulkWriteFlag)) {
+        var currentStateContext = await state.downstreamBulkWriteFlag;
+        console.log('[RXDB_UPSTREAM] taskWithTime context: ', taskWithTime);
+        console.log('[RXDB_UPSTREAM] currentStateContext context: ', currentStateContext);
+        if (taskWithTime.task.context !== currentStateContext) {
+          console.log('[RXDB_UPSTREAM] appending docs from task for persisting to master: ', taskWithTime);
           appendToArray(docs, taskWithTime.task.events.map(r => {
             return r.documentData;
           }));
@@ -214,6 +223,7 @@ export async function startReplicationUpstream(state) {
       }
       var assumedMasterState = await getAssumedMasterState(state, docIds);
       var writeRowsToMaster = {};
+      var result = {};
       var writeRowsToMasterIds = [];
       var writeRowsToMeta = {};
       var forkStateById = {};
@@ -222,6 +232,20 @@ export async function startReplicationUpstream(state) {
         forkStateById[docId] = fullDocData;
         var docData = writeDocToDocState(fullDocData, state.hasAttachments, !!state.input.keepMeta);
         var assumedMasterDoc = assumedMasterState[docId];
+        result[docId] = {
+          newDoc: docData,
+          assumedMasterDoc,
+          isResolvedConflictCondition: assumedMasterDoc &&
+          // if the isResolvedConflict is correct, we do not have to compare the documents.
+          assumedMasterDoc.metaDocument.isResolvedConflict !== fullDocData._rev && state.input.conflictHandler.isEqual(assumedMasterDoc.docData, docData, 'upstream-check-if-equal') || (
+          /**
+           * If the master works with _rev fields,
+           * we use that to check if our current doc state
+           * is different from the assumedMasterDoc.
+           */
+
+          assumedMasterDoc && assumedMasterDoc.docData._rev && getHeightOfRevision(fullDocData._rev) === fullDocData._meta[state.input.identifier])
+        };
 
         /**
          * If the master state is equal to the
@@ -367,6 +391,7 @@ export async function startReplicationUpstream(state) {
        * but to ensure order on parallel checkpoint writes,
        * we have to use a queue.
        */
+      console.log('[RXDB_UPSTREAM] UPSTREAM WRITTEN DOCUMENTS: ', writeRowsToMaster);
       rememberCheckpointBeforeReturn();
       return hadConflictWrites;
     }).catch(unhandledError => {

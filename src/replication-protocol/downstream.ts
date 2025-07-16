@@ -464,6 +464,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                         writeRowsToFork,
                         await state.downstreamBulkWriteFlag
                     ).then((forkWriteResult) => {
+                        console.log('[RXDB_DOWNSTREAM]: forkInstance bulkWrite: ', forkWriteResult);
                         const success = getWrittenDocumentsFromBulkWriteResponse(
                             state.primaryPath,
                             writeRowsToFork,
@@ -501,6 +502,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                         stripAttachmentsDataFromMetaWriteRows(state, useMetaWriteRows),
                         'replication-down-write-meta'
                     ).then(metaWriteResult => {
+                        console.log('[RXDB_DOWNSTREAM]: metaInstance bulkWrite: ', metaWriteResult);
                         metaWriteResult.error
                             .forEach(writeError => {
                                 state.events.error.next(newRxError('RC_PULL', {

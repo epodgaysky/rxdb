@@ -274,6 +274,7 @@ export async function startReplicationDownstream(state) {
       }).then(async () => {
         if (writeRowsToFork.length > 0) {
           return state.input.forkInstance.bulkWrite(writeRowsToFork, await state.downstreamBulkWriteFlag).then(forkWriteResult => {
+            console.log('[RXDB_DOWNSTREAM]: forkInstance bulkWrite: ', forkWriteResult);
             var success = getWrittenDocumentsFromBulkWriteResponse(state.primaryPath, writeRowsToFork, forkWriteResult);
             success.forEach(doc => {
               var docId = doc[primaryPath];
@@ -304,6 +305,7 @@ export async function startReplicationDownstream(state) {
       }).then(() => {
         if (useMetaWriteRows.length > 0) {
           return state.input.metaInstance.bulkWrite(stripAttachmentsDataFromMetaWriteRows(state, useMetaWriteRows), 'replication-down-write-meta').then(metaWriteResult => {
+            console.log('[RXDB_DOWNSTREAM]: metaInstance bulkWrite: ', metaWriteResult);
             metaWriteResult.error.forEach(writeError => {
               state.events.error.next(newRxError('RC_PULL', {
                 id: writeError.documentId,
