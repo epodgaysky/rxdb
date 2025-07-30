@@ -89,7 +89,7 @@ export class RxPipeline<RxDocType> {
                 .changeStream()
                 .subscribe(eventBulk => {
                     console.log(`[RXPIPELINE] destination internalStore$ this.checkpointId: ${this.checkpointId}`);
-                    console.log(`[RXPIPELINE] destination internalStore$ eventBulk: ${eventBulk}`);
+                    console.log(`[RXPIPELINE] destination internalStore$ eventBulk: `, eventBulk);
                     const events = eventBulk.events;
                     for (let index = 0; index < events.length; index++) {
                         const event = events[index];
