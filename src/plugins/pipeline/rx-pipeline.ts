@@ -79,6 +79,7 @@ export class RxPipeline<RxDocType> {
         this.destination.awaitBeforeReads.add(this.waitBeforeWriteFn);
         this.subs.push(
             this.source.eventBulks$.subscribe((bulk) => {
+                console.log(`[RXPIPELINE] source eventBulks$: ${bulk.events[0].documentData._meta.lwt}`);
                 this.lastSourceDocTime.next(bulk.events[0].documentData._meta.lwt);
                 this.somethingChanged.next({});
             })
@@ -87,6 +88,8 @@ export class RxPipeline<RxDocType> {
             this.destination.database.internalStore
                 .changeStream()
                 .subscribe(eventBulk => {
+                    console.log(`[RXPIPELINE] destination internalStore$ this.checkpointId: ${this.checkpointId}`);
+                    console.log(`[RXPIPELINE] destination internalStore$ eventBulk: ${eventBulk}`);
                     const events = eventBulk.events;
                     for (let index = 0; index < events.length; index++) {
                         const event = events[index];
@@ -94,6 +97,7 @@ export class RxPipeline<RxDocType> {
                             event.documentData.context === INTERNAL_CONTEXT_PIPELINE_CHECKPOINT &&
                             event.documentData.key === this.checkpointId
                         ) {
+                            console.log(`[RXPIPELINE] destination internalStore$ this.lastProcessedDocTime: ${event.documentData.data.lastDocTime}`);
                             this.lastProcessedDocTime.next(event.documentData.data.lastDocTime);
                             this.somethingChanged.next({});
                         }
@@ -199,12 +203,15 @@ export class RxPipeline<RxDocType> {
                 console.log('[RXPIPELINE] awaitIdle await this.processQueue error');
                 throw this.error;
             }
+            console.log('[RXPIPELINE] awaitIdle this.lastProcessedDocTime: ', this.lastProcessedDocTime.getValue());
+            console.log('[RXPIPELINE] awaitIdle this.lastSourceDocTime: ', this.lastSourceDocTime.getValue());
             if (this.lastProcessedDocTime.getValue() >= this.lastSourceDocTime.getValue()) {
                 console.log('[RXPIPELINE] awaitIdle done true');
                 done = true;
             } else {
                 console.log('[RXPIPELINE] awaitIdle start over');
                 await firstValueFrom(this.somethingChanged);
+                console.log('[RXPIPELINE] awaitIdle start over');
             }
         }
     }
@@ -247,8 +254,10 @@ export async function getCheckpointDoc<RxDocType>(
         pipeline.checkpointId,
         INTERNAL_CONTEXT_PIPELINE_CHECKPOINT
     );
+    console.log('[RXPIPELINE] getCheckpointDoc checkpointId: ', checkpointId);
     const results = await insternalStore.findDocumentsById([checkpointId], false);
     const result: RxDocumentData<InternalStoreDocType> = results[0];
+    console.log('[RXPIPELINE] getCheckpointDoc results: ', result);
     if (result) {
         return result;
     } else {
@@ -278,11 +287,16 @@ export async function setCheckpointDoc<RxDocType>(
         key: pipeline.checkpointId
     };
 
+    console.log('[RXPIPELINE] setCheckpointDoc: ', newDoc);
+
     const writeResult = await insternalStore.bulkWrite([{
         previous,
         document: newDoc,
     }], 'rx-pipeline');
+
+    console.log('[RXPIPELINE] setCheckpointDoc writeResult: ', writeResult);
     if (writeResult.error.length > 0) {
+        console.log('[RXPIPELINE] setCheckpointDoc error: ', writeResult.error);
         throw writeResult.error;
     }
 }
@@ -298,8 +312,11 @@ export async function addPipeline<RxDocType>(
         options.handler,
         options.batchSize
     );
+    console.log('[RXPIPELINE] addPipeline: ', pipeline);
     const waitForLeadership = typeof options.waitForLeadership === 'undefined' ? true : options.waitForLeadership;
+    console.log('[RXPIPELINE] addPipeline: ', waitForLeadership);
     const startPromise = waitForLeadership ? this.database.waitForLeadership() : PROMISE_RESOLVE_VOID;
+    console.log('[RXPIPELINE] addPipeline: ', waitForLeadership);
     startPromise.then(() => {
         pipeline.trigger();
         pipeline.subs.push(

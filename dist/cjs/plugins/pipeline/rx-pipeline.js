@@ -47,14 +47,18 @@ var RxPipeline = exports.RxPipeline = /*#__PURE__*/function () {
     this.source.onClose.push(() => this.close());
     this.destination.awaitBeforeReads.add(this.waitBeforeWriteFn);
     this.subs.push(this.source.eventBulks$.subscribe(bulk => {
+      console.log("[RXPIPELINE] source eventBulks$: " + bulk.events[0].documentData._meta.lwt);
       this.lastSourceDocTime.next(bulk.events[0].documentData._meta.lwt);
       this.somethingChanged.next({});
     }));
     this.subs.push(this.destination.database.internalStore.changeStream().subscribe(eventBulk => {
+      console.log("[RXPIPELINE] destination internalStore$ this.checkpointId: " + this.checkpointId);
+      console.log("[RXPIPELINE] destination internalStore$ eventBulk: " + eventBulk);
       var events = eventBulk.events;
       for (var index = 0; index < events.length; index++) {
         var event = events[index];
         if (event.documentData.context === _rxDatabaseInternalStore.INTERNAL_CONTEXT_PIPELINE_CHECKPOINT && event.documentData.key === this.checkpointId) {
+          console.log("[RXPIPELINE] destination internalStore$ this.lastProcessedDocTime: " + event.documentData.data.lastDocTime);
           this.lastProcessedDocTime.next(event.documentData.data.lastDocTime);
           this.somethingChanged.next({});
         }
@@ -155,12 +159,15 @@ var RxPipeline = exports.RxPipeline = /*#__PURE__*/function () {
         console.log('[RXPIPELINE] awaitIdle await this.processQueue error');
         throw this.error;
       }
+      console.log('[RXPIPELINE] awaitIdle this.lastProcessedDocTime: ', this.lastProcessedDocTime.getValue());
+      console.log('[RXPIPELINE] awaitIdle this.lastSourceDocTime: ', this.lastSourceDocTime.getValue());
       if (this.lastProcessedDocTime.getValue() >= this.lastSourceDocTime.getValue()) {
         console.log('[RXPIPELINE] awaitIdle done true');
         done = true;
       } else {
         console.log('[RXPIPELINE] awaitIdle start over');
         await (0, _rxjs.firstValueFrom)(this.somethingChanged);
+        console.log('[RXPIPELINE] awaitIdle start over');
       }
     }
   };
@@ -196,8 +203,10 @@ var RxPipeline = exports.RxPipeline = /*#__PURE__*/function () {
 async function getCheckpointDoc(pipeline) {
   var insternalStore = pipeline.destination.database.internalStore;
   var checkpointId = (0, _rxDatabaseInternalStore.getPrimaryKeyOfInternalDocument)(pipeline.checkpointId, _rxDatabaseInternalStore.INTERNAL_CONTEXT_PIPELINE_CHECKPOINT);
+  console.log('[RXPIPELINE] getCheckpointDoc checkpointId: ', checkpointId);
   var results = await insternalStore.findDocumentsById([checkpointId], false);
   var result = results[0];
+  console.log('[RXPIPELINE] getCheckpointDoc results: ', result);
   if (result) {
     return result;
   } else {
@@ -218,18 +227,24 @@ async function setCheckpointDoc(pipeline, newCheckpoint, previous) {
     id: (0, _rxDatabaseInternalStore.getPrimaryKeyOfInternalDocument)(pipeline.checkpointId, _rxDatabaseInternalStore.INTERNAL_CONTEXT_PIPELINE_CHECKPOINT),
     key: pipeline.checkpointId
   };
+  console.log('[RXPIPELINE] setCheckpointDoc: ', newDoc);
   var writeResult = await insternalStore.bulkWrite([{
     previous,
     document: newDoc
   }], 'rx-pipeline');
+  console.log('[RXPIPELINE] setCheckpointDoc writeResult: ', writeResult);
   if (writeResult.error.length > 0) {
+    console.log('[RXPIPELINE] setCheckpointDoc error: ', writeResult.error);
     throw writeResult.error;
   }
 }
 async function addPipeline(options) {
   var pipeline = new RxPipeline(options.identifier, this, options.destination, options.handler, options.batchSize);
+  console.log('[RXPIPELINE] addPipeline: ', pipeline);
   var waitForLeadership = typeof options.waitForLeadership === 'undefined' ? true : options.waitForLeadership;
+  console.log('[RXPIPELINE] addPipeline: ', waitForLeadership);
   var startPromise = waitForLeadership ? this.database.waitForLeadership() : _index.PROMISE_RESOLVE_VOID;
+  console.log('[RXPIPELINE] addPipeline: ', waitForLeadership);
   startPromise.then(() => {
     pipeline.trigger();
     pipeline.subs.push(this.eventBulks$.pipe((0, _rxjs.filter)(bulk => {
