@@ -22,7 +22,10 @@ export var RxPipeline = /*#__PURE__*/function () {
     this.secretFunctionName = 'tx_fn_' + randomToken(10);
     this.waitBeforeWriteFn = async () => {
       var stack = new Error().stack;
-      if (stack && stack.includes(this.secretFunctionName)) {} else {
+      if (stack && stack.includes(this.secretFunctionName)) {
+        console.log('[RXPIPELINE] waitBeforeWriteFn call from secretFunction');
+      } else {
+        console.log('[RXPIPELINE] waitBeforeWriteFn call from outside');
         await this.awaitIdle();
       }
     };
@@ -63,14 +66,19 @@ export var RxPipeline = /*#__PURE__*/function () {
     this.toRun = this.toRun + 1;
     this.processQueue = this.processQueue.then(async () => {
       this.toRun = this.toRun - 1;
+      console.log('[RXPIPELINE] trigger processQueue start');
       var done = false;
       var _loop = async function () {
           var checkpointDoc = await getCheckpointDoc(_this2);
+          console.log('[RXPIPELINE] trigger checkpointDoc: ', checkpointDoc);
           var checkpoint = checkpointDoc ? checkpointDoc.data.checkpoint : undefined;
+          console.log('[RXPIPELINE] trigger checkpoint: ', checkpoint);
           var docsSinceResult = await getChangedDocumentsSince(_this2.source.storageInstance, _this2.batchSize, checkpoint);
+          console.log('[RXPIPELINE] trigger docsSinceResult: ', docsSinceResult);
           var lastTime = checkpointDoc ? checkpointDoc.data.lastDocTime : 0;
           if (docsSinceResult.documents.length > 0) {
             var rxDocuments = mapDocumentsDataToCacheDocs(_this2.source._docCache, docsSinceResult.documents);
+            console.log('[RXPIPELINE] trigger rxDocuments: ', rxDocuments);
             var _this = _this2;
 
             // const o: any = {};
@@ -82,27 +90,38 @@ export var RxPipeline = /*#__PURE__*/function () {
 
             var fnKey = blockFlaggedFunctionKey();
             _this2.secretFunctionName = fnKey;
+            console.log('[RXPIPELINE] trigger this.secretFunctionName: ', _this2.secretFunctionName);
             try {
               await FLAGGED_FUNCTIONS[fnKey](() => _this.handler(rxDocuments));
+              console.log('[RXPIPELINE] trigger FLAGGED_FUNCTIONS handler succeed');
             } catch (err) {
+              console.log('[RXPIPELINE] trigger FLAGGED_FUNCTIONS handler error, ', err);
               _this2.error = err;
             } finally {
+              console.log('[RXPIPELINE] trigger FLAGGED_FUNCTIONS released: ', fnKey);
               releaseFlaggedFunctionKey(fnKey);
             }
             if (_this2.error) {
+              console.log('[RXPIPELINE] trigger error: ', _this2.error);
               return {
                 v: void 0
               };
             }
             lastTime = ensureNotFalsy(lastOfArray(docsSinceResult.documents))._meta.lwt;
+            console.log('[RXPIPELINE] trigger lastTime: ', lastTime);
           }
           if (!_this2.destination.closed) {
             await setCheckpointDoc(_this2, {
               checkpoint: docsSinceResult.checkpoint,
               lastDocTime: lastTime
             }, checkpointDoc);
+            console.log('[RXPIPELINE] trigger setCheckpointDoc: ', {
+              checkpoint: docsSinceResult.checkpoint,
+              lastDocTime: lastTime
+            }, checkpointDoc);
           }
           if (docsSinceResult.documents.length < _this2.batchSize) {
+            console.log('[RXPIPELINE] trigger done: true ');
             done = true;
           }
         },
@@ -114,18 +133,24 @@ export var RxPipeline = /*#__PURE__*/function () {
     });
   };
   _proto.awaitIdle = async function awaitIdle() {
+    console.log('[RXPIPELINE] awaitIdle start');
     if (this.error) {
+      console.log('[RXPIPELINE] awaitIdle error');
       throw this.error;
     }
     var done = false;
     while (!done) {
       await this.processQueue;
+      console.log('[RXPIPELINE] awaitIdle await this.processQueue');
       if (this.error) {
+        console.log('[RXPIPELINE] awaitIdle await this.processQueue error');
         throw this.error;
       }
       if (this.lastProcessedDocTime.getValue() >= this.lastSourceDocTime.getValue()) {
+        console.log('[RXPIPELINE] awaitIdle done true');
         done = true;
       } else {
+        console.log('[RXPIPELINE] awaitIdle start over');
         await firstValueFrom(this.somethingChanged);
       }
     }

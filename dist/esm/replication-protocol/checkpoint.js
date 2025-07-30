@@ -22,8 +22,6 @@ export async function getLastCheckpointDoc(state, direction) {
  */
 export async function setCheckpoint(state, direction, checkpoint) {
   state.checkpointQueue = state.checkpointQueue.then(async () => {
-    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_" + direction.toUpperCase() + "STREAM] setCheckpoint PREVIOUS CHECKPOINT: ", state.lastCheckpointDoc.up);
-    console.log("[RXDB_" + state.input.forkInstance.collectionName + "_" + direction.toUpperCase() + "STREAM] setCheckpoint CURRENT CHECKPOINT: ", checkpoint);
     var previousCheckpointDoc = state.lastCheckpointDoc[direction];
     if (checkpoint &&
     /**
@@ -40,7 +38,6 @@ export async function setCheckpoint(state, direction, checkpoint) {
      */
 
     !previousCheckpointDoc || JSON.stringify(previousCheckpointDoc.checkpointData) !== JSON.stringify(checkpoint))) {
-      console.log("[RXDB_" + state.input.forkInstance.collectionName + "_" + direction.toUpperCase() + "STREAM] setCheckpoint WRITING CHECKPOINT: ", checkpoint);
       var newDoc = {
         id: '',
         isCheckpoint: '1',
