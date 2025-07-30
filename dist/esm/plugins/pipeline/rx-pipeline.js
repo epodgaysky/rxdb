@@ -38,7 +38,7 @@ export var RxPipeline = /*#__PURE__*/function () {
     this.source.onClose.push(() => this.close());
     this.destination.awaitBeforeReads.add(this.waitBeforeWriteFn);
     this.subs.push(this.source.eventBulks$.subscribe(bulk => {
-      console.log("[RXPIPELINE] source eventBulks$: " + bulk.events[0].documentData._meta.lwt);
+      console.log("[RXPIPELINE] source eventBulks$: ", bulk.events);
       this.lastSourceDocTime.next(bulk.events[0].documentData._meta.lwt);
       this.somethingChanged.next({});
     }));
