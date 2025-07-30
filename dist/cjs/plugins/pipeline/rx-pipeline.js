@@ -53,7 +53,7 @@ var RxPipeline = exports.RxPipeline = /*#__PURE__*/function () {
     }));
     this.subs.push(this.destination.database.internalStore.changeStream().subscribe(eventBulk => {
       console.log("[RXPIPELINE] destination internalStore$ this.checkpointId: " + this.checkpointId);
-      console.log("[RXPIPELINE] destination internalStore$ eventBulk: ", eventBulk);
+      console.log("[RXPIPELINE] destination internalStore$ eventBulk.events: ", eventBulk.events);
       var events = eventBulk.events;
       for (var index = 0; index < events.length; index++) {
         var event = events[index];
