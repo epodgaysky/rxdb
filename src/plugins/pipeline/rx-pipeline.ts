@@ -78,11 +78,19 @@ export class RxPipeline<RxDocType> {
         this.source.onClose.push(() => this.close());
         this.destination.awaitBeforeReads.add(this.waitBeforeWriteFn);
         this.subs.push(
-            this.source.eventBulks$.subscribe((bulk) => {
-                console.log(`[RXPIPELINE] source eventBulks$: `, bulk.events);
-                this.lastSourceDocTime.next(bulk.events[0].documentData._meta.lwt);
-                this.somethingChanged.next({});
-            })
+            this.source.eventBulks$.pipe(
+                filter(bulk => {
+                    if (this.stopped) {
+                        return false;
+                    }
+
+                    return !bulk.isLocal;
+                })
+            )
+                .subscribe((bulk) => {
+                    this.lastSourceDocTime.next(bulk.events[0].documentData._meta.lwt);
+                    this.somethingChanged.next({});
+                })
         );
         this.subs.push(
             this.destination.database.internalStore
