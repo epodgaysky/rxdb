@@ -185,6 +185,8 @@ export function categorizeBulkWriteRows<RxDocType>(
     onInsert?: (docData: RxDocumentData<RxDocType>) => void,
     onUpdate?: (docData: RxDocumentData<RxDocType>) => void
 ): CategorizeBulkWriteRowsOutput<RxDocType> {
+    console.log(`[CATEGORIZE BULK WRITE] START FOR CONTEXT ${context} DOCS IN DB: `, docsInDb);
+    console.log(`[CATEGORIZE BULK WRITE] START FOR CONTEXT ${context} BULK WRITE ROWS: `, bulkWriteRows);
     const hasAttachments = !!storageInstance.schema.attachments;
     const bulkInsertDocs: BulkWriteRowProcessed<RxDocType>[] = [];
     const bulkUpdateDocs: BulkWriteRowProcessed<RxDocType>[] = [];
@@ -443,6 +445,17 @@ export function categorizeBulkWriteRows<RxDocType>(
             eventBulkEvents.push(event);
         }
     }
+
+    console.log(`[CATEGORIZE BULK WRITE] RESULT FOR CONTEXT ${context} : `, {
+        bulkInsertDocs,
+        bulkUpdateDocs,
+        newestRow,
+        errors,
+        eventBulk,
+        attachmentsAdd,
+        attachmentsRemove,
+        attachmentsUpdate
+    });
 
     return {
         bulkInsertDocs,

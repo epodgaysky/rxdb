@@ -129,6 +129,8 @@ bulkWriteRows, context,
  * For example when get-by-id and insert/update can run in parallel.
  */
 onInsert, onUpdate) {
+  console.log("[CATEGORIZE BULK WRITE] START FOR CONTEXT " + context + " DOCS IN DB: ", docsInDb);
+  console.log("[CATEGORIZE BULK WRITE] START FOR CONTEXT " + context + " BULK WRITE ROWS: ", bulkWriteRows);
   var hasAttachments = !!storageInstance.schema.attachments;
   var bulkInsertDocs = [];
   var bulkUpdateDocs = [];
@@ -347,6 +349,16 @@ onInsert, onUpdate) {
   for (var rowId = 0; rowId < rowAmount; rowId++) {
     if (_loop()) continue;
   }
+  console.log("[CATEGORIZE BULK WRITE] RESULT FOR CONTEXT " + context + " : ", {
+    bulkInsertDocs,
+    bulkUpdateDocs,
+    newestRow,
+    errors,
+    eventBulk,
+    attachmentsAdd,
+    attachmentsRemove,
+    attachmentsUpdate
+  });
   return {
     bulkInsertDocs,
     bulkUpdateDocs,

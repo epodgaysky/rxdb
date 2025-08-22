@@ -110,7 +110,6 @@ export class RxStorageInstanceMemory<RxDocType> implements RxStorageInstance<
         const documentsById = this.internals.documents;
         const primaryPath = this.primaryPath;
 
-
         const categorized = categorizeBulkWriteRows<RxDocType>(
             this,
             primaryPath as any,
