@@ -78,6 +78,7 @@ export class RxStorageInstanceDexie<RxDocType> implements RxStorageInstance<
         documentWrites: BulkWriteRow<RxDocType>[],
         context: string
     ): Promise<RxStorageBulkWriteResponse<RxDocType>> {
+        console.log(`[BULK WRITE] FOR CONTEXT ${context}: `, documentWrites);
         ensureNotClosed(this);
 
         if (
@@ -202,7 +203,9 @@ export class RxStorageInstanceDexie<RxDocType> implements RxStorageInstance<
                     categorized.attachmentsRemove.map(attachment => attachmentObjectId(attachment.documentId, attachment.attachmentId))
                 );
 
-            });
+            }).catch((error) => {
+            console.log(`[BULK WRITE] FOR CONTEXT ${context} ERROR: `, error);
+        });
 
         categorized = ensureNotFalsy(categorized);
         if (categorized.eventBulk.events.length > 0) {
@@ -213,6 +216,8 @@ export class RxStorageInstanceDexie<RxDocType> implements RxStorageInstance<
             };
             this.changes$.next(categorized.eventBulk);
         }
+
+        console.log(`[BULK WRITE] FOR CONTEXT ${context} succeed: `, ret);
 
         return ret;
     }

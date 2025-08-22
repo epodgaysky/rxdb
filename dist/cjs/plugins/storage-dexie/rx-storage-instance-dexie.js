@@ -31,6 +31,7 @@ var RxStorageInstanceDexie = exports.RxStorageInstanceDexie = /*#__PURE__*/funct
   }
   var _proto = RxStorageInstanceDexie.prototype;
   _proto.bulkWrite = async function bulkWrite(documentWrites, context) {
+    console.log("[BULK WRITE] FOR CONTEXT " + context + ": ", documentWrites);
     ensureNotClosed(this);
     if (!shownNonPremiumLog && !(await (0, _index.hasPremiumFlag)())) {
       console.warn(['-------------- RxDB Open Core RxStorage -------------------------------', 'You are using the free Dexie.js based RxStorage implementation from RxDB https://rxdb.info/rx-storage-dexie.html?console=dexie ', 'While this is a great option, we want to let you know that there are faster storage solutions available in our premium plugins.', 'For professional users and production environments, we highly recommend considering these premium options to enhance performance and reliability.', ' https://rxdb.info/premium/?console=dexie ', 'If you already purchased premium access you can disable this log by calling the setPremiumFlag() function from rxdb-premium/plugins/shared.', '---------------------------------------------------------------------'].join('\n'));
@@ -120,6 +121,8 @@ var RxStorageInstanceDexie = exports.RxStorageInstanceDexie = /*#__PURE__*/funct
       });
       await state.dexieAttachmentsTable.bulkPut(putAttachments);
       await state.dexieAttachmentsTable.bulkDelete(categorized.attachmentsRemove.map(attachment => (0, _dexieHelper.attachmentObjectId)(attachment.documentId, attachment.attachmentId)));
+    }).catch(error => {
+      console.log("[BULK WRITE] FOR CONTEXT " + context + " ERROR: ", error);
     });
     categorized = (0, _index.ensureNotFalsy)(categorized);
     if (categorized.eventBulk.events.length > 0) {
@@ -130,6 +133,7 @@ var RxStorageInstanceDexie = exports.RxStorageInstanceDexie = /*#__PURE__*/funct
       };
       this.changes$.next(categorized.eventBulk);
     }
+    console.log("[BULK WRITE] FOR CONTEXT " + context + " succeed: ", ret);
     return ret;
   };
   _proto.findDocumentsById = async function findDocumentsById(ids, deleted) {
