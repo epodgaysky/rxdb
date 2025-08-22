@@ -1100,6 +1100,8 @@ export async function createRxCollection(
         conflictHandler = defaultConflictHandler
     }: any
 ): Promise<RxCollection> {
+    console.log(`[RXDB] create collection ${name} start`);
+
     const storageInstanceCreationParams: RxStorageInstanceCreationParams<any, any> = {
         databaseInstanceToken: database.token,
         databaseName: database.name,
@@ -1116,10 +1118,15 @@ export async function createRxCollection(
         storageInstanceCreationParams
     );
 
+    console.log(`[RXDB] create collection ${name} hooks ran`);
+
     const storageInstance = await createRxCollectionStorageInstance(
         database,
         storageInstanceCreationParams
     );
+
+    console.log(`[RXDB] create collection ${name} storageInstance: `, storageInstance);
+
 
     const collection = new RxCollectionBase(
         database,
@@ -1136,8 +1143,11 @@ export async function createRxCollection(
         conflictHandler
     );
 
+    console.log(`[RXDB] create collection ${name} collection: `, collection);
+
     try {
         await collection.prepare();
+        console.log(`[RXDB] create collection ${name} collection prepared`);
 
         // ORM add statics
         Object
@@ -1164,6 +1174,7 @@ export async function createRxCollection(
                 statics
             }
         });
+        console.log(`[RXDB] create collection ${name} run hooks`);
 
         /**
          * Migration must run after the hooks so that the
@@ -1175,6 +1186,7 @@ export async function createRxCollection(
         }
 
     } catch (err) {
+        console.log(`[RXDB] create collection ${name} error: `, err);
         /**
          * If the collection creation fails,
          * we yet have to close the storage instances.
@@ -1183,6 +1195,8 @@ export async function createRxCollection(
         await storageInstance.close();
         throw err;
     }
+
+    console.log(`[RXDB] create collection ${name} succeed`);
 
     return collection as any;
 }

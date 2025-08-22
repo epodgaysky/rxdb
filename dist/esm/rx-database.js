@@ -199,55 +199,68 @@ export var RxDatabaseBase = /*#__PURE__*/function () {
     var schemas = {};
     var bulkPutDocs = [];
     var useArgsByCollectionName = {};
+    console.log('[RXDB] Adding collections: ', collectionCreators);
     await Promise.all(Object.entries(collectionCreators).map(async ([name, args]) => {
-      var collectionName = name;
-      var rxJsonSchema = args.schema;
-      jsonSchemas[collectionName] = rxJsonSchema;
-      var schema = createRxSchema(rxJsonSchema, this.hashFunction);
-      schemas[collectionName] = schema;
+      try {
+        console.log("[RXDB] Collection " + name + " preparing data start");
+        var collectionName = name;
+        var rxJsonSchema = args.schema;
+        jsonSchemas[collectionName] = rxJsonSchema;
+        var schema = createRxSchema(rxJsonSchema, this.hashFunction);
+        console.log("[RXDB] Collection " + name + " schema created");
+        schemas[collectionName] = schema;
 
-      // collection already exists
-      if (this.collections[name]) {
-        throw newRxError('DB3', {
-          name
+        // collection already exists
+        if (this.collections[name]) {
+          console.log("[RXDB] ERROR: Collection " + name + " already exist");
+          throw newRxError('DB3', {
+            name
+          });
+        }
+        var collectionNameWithVersion = _collectionNamePrimary(name, rxJsonSchema);
+        console.log("[RXDB] Collection name with version: " + collectionNameWithVersion);
+        var collectionDocData = {
+          id: getPrimaryKeyOfInternalDocument(collectionNameWithVersion, INTERNAL_CONTEXT_COLLECTION),
+          key: collectionNameWithVersion,
+          context: INTERNAL_CONTEXT_COLLECTION,
+          data: {
+            name: collectionName,
+            schemaHash: await schema.hash,
+            schema: schema.jsonSchema,
+            version: schema.version,
+            connectedStorages: []
+          },
+          _deleted: false,
+          _meta: getDefaultRxDocumentMeta(),
+          _rev: getDefaultRevision(),
+          _attachments: {}
+        };
+        bulkPutDocs.push({
+          document: collectionDocData
         });
-      }
-      var collectionNameWithVersion = _collectionNamePrimary(name, rxJsonSchema);
-      var collectionDocData = {
-        id: getPrimaryKeyOfInternalDocument(collectionNameWithVersion, INTERNAL_CONTEXT_COLLECTION),
-        key: collectionNameWithVersion,
-        context: INTERNAL_CONTEXT_COLLECTION,
-        data: {
+        var useArgs = Object.assign({}, args, {
           name: collectionName,
-          schemaHash: await schema.hash,
-          schema: schema.jsonSchema,
-          version: schema.version,
-          connectedStorages: []
-        },
-        _deleted: false,
-        _meta: getDefaultRxDocumentMeta(),
-        _rev: getDefaultRevision(),
-        _attachments: {}
-      };
-      bulkPutDocs.push({
-        document: collectionDocData
-      });
-      var useArgs = Object.assign({}, args, {
-        name: collectionName,
-        schema,
-        database: this
-      });
+          schema,
+          database: this
+        });
 
-      // run hooks
-      var hookData = flatClone(args);
-      hookData.database = this;
-      hookData.name = name;
-      runPluginHooks('preCreateRxCollection', hookData);
-      useArgs.conflictHandler = hookData.conflictHandler;
-      useArgsByCollectionName[collectionName] = useArgs;
+        // run hooks
+        var hookData = flatClone(args);
+        hookData.database = this;
+        hookData.name = name;
+        runPluginHooks('preCreateRxCollection', hookData);
+        useArgs.conflictHandler = hookData.conflictHandler;
+        useArgsByCollectionName[collectionName] = useArgs;
+        console.log("[RXDB] Collection " + name + " preparing data finished");
+      } catch (error) {
+        console.log("[RXDB] collection " + name + " preparing data error: ", error);
+      }
     }));
+    console.log('[RXDB] Collections data prepared');
     var putDocsResult = await this.internalStore.bulkWrite(bulkPutDocs, 'rx-database-add-collection');
+    console.log('[RXDB] putDocsResult: ', putDocsResult);
     await ensureNoStartupErrors(this);
+    console.log('[RXDB] ensureNoStartupErrors');
     await Promise.all(putDocsResult.error.map(async error => {
       if (error.status !== 409) {
         throw newRxError('DB12', {
@@ -270,20 +283,28 @@ export var RxDatabaseBase = /*#__PURE__*/function () {
         });
       }
     }));
+    console.log('[RXDB] adding collections');
     var ret = {};
     await Promise.all(Object.keys(collectionCreators).map(async collectionName => {
-      var useArgs = useArgsByCollectionName[collectionName];
-      var collection = await createRxCollection(useArgs);
-      ret[collectionName] = collection;
+      try {
+        var useArgs = useArgsByCollectionName[collectionName];
+        console.log("[RXDB] adding " + collectionName + " collection");
+        var collection = await createRxCollection(useArgs);
+        console.log("[RXDB] collection " + collectionName + " added: ", collection);
+        ret[collectionName] = collection;
 
-      // set as getter to the database
-      this.collections[collectionName] = collection;
-      if (!this[collectionName]) {
-        Object.defineProperty(this, collectionName, {
-          get: () => this.collections[collectionName]
-        });
+        // set as getter to the database
+        this.collections[collectionName] = collection;
+        if (!this[collectionName]) {
+          Object.defineProperty(this, collectionName, {
+            get: () => this.collections[collectionName]
+          });
+        }
+      } catch (error) {
+        console.log("[RXDB] collection " + collectionName + " adding error: ", error);
       }
     }));
+    console.log('[RXDB] collections successfully added');
     return ret;
   }
 

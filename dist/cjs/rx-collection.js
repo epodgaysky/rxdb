@@ -777,6 +777,7 @@ async function createRxCollection({
   cacheReplacementPolicy = _queryCache.defaultCacheReplacementPolicy,
   conflictHandler = _defaultConflictHandler.defaultConflictHandler
 }) {
+  console.log("[RXDB] create collection " + name + " start");
   var storageInstanceCreationParams = {
     databaseInstanceToken: database.token,
     databaseName: database.name,
@@ -788,10 +789,14 @@ async function createRxCollection({
     devMode: _overwritable.overwritable.isDevMode()
   };
   (0, _hooks.runPluginHooks)('preCreateRxStorageInstance', storageInstanceCreationParams);
+  console.log("[RXDB] create collection " + name + " hooks ran");
   var storageInstance = await (0, _rxCollectionHelper.createRxCollectionStorageInstance)(database, storageInstanceCreationParams);
+  console.log("[RXDB] create collection " + name + " storageInstance: ", storageInstance);
   var collection = new RxCollectionBase(database, name, schema, storageInstance, instanceCreationOptions, migrationStrategies, methods, attachments, options, cacheReplacementPolicy, statics, conflictHandler);
+  console.log("[RXDB] create collection " + name + " collection: ", collection);
   try {
     await collection.prepare();
+    console.log("[RXDB] create collection " + name + " collection prepared");
 
     // ORM add statics
     Object.entries(statics).forEach(([funName, fun]) => {
@@ -815,6 +820,7 @@ async function createRxCollection({
         statics
       }
     });
+    console.log("[RXDB] create collection " + name + " run hooks");
 
     /**
      * Migration must run after the hooks so that the
@@ -825,6 +831,7 @@ async function createRxCollection({
       await collection.migratePromise();
     }
   } catch (err) {
+    console.log("[RXDB] create collection " + name + " error: ", err);
     /**
      * If the collection creation fails,
      * we yet have to close the storage instances.
@@ -833,6 +840,7 @@ async function createRxCollection({
     await storageInstance.close();
     throw err;
   }
+  console.log("[RXDB] create collection " + name + " succeed");
   return collection;
 }
 function isRxCollection(obj) {
