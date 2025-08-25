@@ -6,10 +6,11 @@ import webpack from 'webpack';
 const __dirname = import.meta.dirname;
 
 export default {
-    entry: './client/index.js',
+    entry: ['./client/index.js'],
     output: {
         filename: 'bundle.js',
         path: path.resolve(__dirname, 'dist'),
+        scriptType: 'text/javascript',
         library: {
             type: "module"
         }
@@ -35,7 +36,13 @@ export default {
             {
                 test: /\.js$/,
                 enforce: 'pre',
-                use: ['source-map-loader'],
+                use: ['source-map-loader', {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: ['@babel/preset-env'],
+                        plugins: []
+                    }
+                }],
             },
             {
                 test: /\.css$/,

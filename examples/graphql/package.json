@@ -3,15 +3,10 @@
   "version": "0.0.0",
   "scripts": {
     "preinstall": "(cd ../../ && npx yarn@1.22.22 pack ../../ --filename ./examples/graphql/rxdb-local.tgz)",
-    "dev": "webpack serve",
-    "start": "concurrently \"npm run server\" \"npm run dev\"",
+    "refresh": "rimraf -r node_modules/rxdb/ && npm i --force",
     "server": "node ./server/index.js",
-    "refresh": "rimraf -r node_modules/rxdb/ && npm i ",
-    "build": "webpack",
-    "build:serve": "ws -p 8888 -d dist/",
-    "test:e2e": "testcafe chromium -e test/ --hostname localhost",
-    "test:pouchdb": "STORAGE=pouchdb concurrently \"npm run server\" \"npm run build:serve\" \"sleep 10 && npm run test:e2e\" --kill-others --success first",
-    "test:localstorage": "STORAGE=localstorage concurrently \"npm run server\" \"npm run build:serve\" \"sleep 10 && npm run test:e2e\" --kill-others --success first"
+    "build": "concurrently \"webpack -c ./worker.webpack.config.js\" \"webpack -c ./webpack.config.js\"",
+    "build:serve": "ws -p 8888 -d dist/"
   },
   "browser": {
     "fs": false
@@ -22,7 +17,6 @@
   "type": "module",
   "//": "NOTICE: For the Github CI we use the local RxDB build (rxdb-local.tgz). In your app should just install 'rxdb' from npm instead",
   "dependencies": {
-    "rxdb": "file:rxdb-local.tgz",
     "@apollo/server": "4.12.2",
     "concurrently": "9.2.0",
     "cors": "2.8.5",
@@ -33,11 +27,16 @@
     "local-web-server": "5.4.0",
     "normalize.css": "8.0.1",
     "pouchdb-adapter-idb": "9.0.0",
+    "rxdb": "file:rxdb-local.tgz",
+    "rxdb-premium": "16.17.2",
     "rxjs": "7.8.2",
     "ws": "8.18.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.3",
+    "@babel/preset-env": "^7.28.3",
     "async-test-util": "2.5.0",
+    "babel-loader": "^10.0.0",
     "css-loader": "7.1.2",
     "eslint": "8.57.1",
     "esm": "3.2.25",
@@ -48,10 +47,14 @@
     "rimraf": "5.0.10",
     "source-map-loader": "5.0.0",
     "style-loader": "4.0.0",
+    "terser-webpack-plugin": "^5.3.14",
     "testcafe": "3.7.2",
     "testcafe-hammerhead": "31.7.5",
     "webpack": "5.101.2",
     "webpack-cli": "6.0.1",
     "webpack-dev-server": "5.2.2"
+  },
+  "accessTokens": {
+    "rxdb-premium": "your_premium_token"
   }
 }

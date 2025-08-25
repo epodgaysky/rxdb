@@ -3,14 +3,7 @@ import {
     addRxPlugin,
     createRxDatabase
 } from 'rxdb';
-
-import {
-    getRxStorageLocalstorage
-} from 'rxdb/plugins/storage-localstorage';
-
-import {
-    getRxStorageMemory
-} from 'rxdb/plugins/storage-memory';
+import { getRxStorageSharedWorker } from 'rxdb-premium/plugins/storage-worker';
 
 import {
     filter
@@ -57,7 +50,6 @@ const storageField = document.querySelector('#storage-key');
 const databaseNameField = document.querySelector('#database-name');
 
 console.log('hostname: ' + window.location.hostname);
-
 
 const syncUrls = {
     http: 'http://' + window.location.hostname + ':' + GRAPHQL_PORT + GRAPHQL_PATH,
@@ -124,16 +116,6 @@ function getStorageKey() {
 /**
  * Easy toggle of the storage engine via query parameter.
  */
-function getStorage() {
-    const storageKey = getStorageKey();
-    if (storageKey === 'localstorage') {
-        return getRxStorageLocalstorage();
-    } else if (storageKey === 'memory') {
-        return getRxStorageMemory();
-    } else {
-        throw new Error('storage key not defined ' + storageKey);
-    }
-}
 
 
 async function run() {
@@ -143,9 +125,10 @@ async function run() {
     const db = await createRxDatabase({
         name: getDatabaseName(),
         storage: wrappedValidateAjvStorage({
-            storage: getStorage()
+            storage: getRxStorageSharedWorker(
+                { workerInput: './worker.js' }
+            )
         }),
-        multiInstance: getStorageKey() !== 'memory'
     });
     window.db = db;
 
@@ -158,7 +141,8 @@ async function run() {
     heroesList.innerHTML = 'Create collection..';
     await db.addCollections({
         hero: {
-            schema: heroSchema
+            autoMigrate: false,
+            schema: heroSchema,
         }
     });
 
@@ -188,7 +172,6 @@ async function run() {
             live: true,
             deletedField: 'deleted'
         });
-
 
         // show replication-errors in logs
         heroesList.innerHTML = 'Subscribe to errors..';
