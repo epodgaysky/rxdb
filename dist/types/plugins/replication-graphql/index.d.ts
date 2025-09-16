@@ -13,13 +13,14 @@ export declare class RxGraphQLReplicationState<RxDocType, CheckpointType> extend
     retryTime?: number | undefined;
     autoStart?: boolean | undefined;
     readonly customFetch?: WindowOrWorkerGlobalScope["fetch"] | undefined;
-    constructor(url: GraphQLServerUrl, clientState: RxGraphQLReplicationClientState, replicationIdentifier: string, collection: RxCollection<RxDocType, any, any, any>, deletedField: string, pull?: ReplicationPullOptions<RxDocType, CheckpointType> | undefined, push?: ReplicationPushOptions<RxDocType> | undefined, live?: boolean | undefined, retryTime?: number | undefined, autoStart?: boolean | undefined, customFetch?: WindowOrWorkerGlobalScope["fetch"] | undefined);
+    toggleOnDocumentVisible?: boolean | undefined;
+    constructor(url: GraphQLServerUrl, clientState: RxGraphQLReplicationClientState, replicationIdentifier: string, collection: RxCollection<RxDocType, any, any, any>, deletedField: string, pull?: ReplicationPullOptions<RxDocType, CheckpointType> | undefined, push?: ReplicationPushOptions<RxDocType> | undefined, live?: boolean | undefined, retryTime?: number | undefined, autoStart?: boolean | undefined, customFetch?: WindowOrWorkerGlobalScope["fetch"] | undefined, toggleOnDocumentVisible?: boolean | undefined);
     setHeaders(headers: ById<string>): void;
     setCredentials(credentials: RequestCredentials | undefined): void;
     graphQLRequest(queryParams: RxGraphQLReplicationQueryBuilderResponseObject): Promise<any>;
 }
 export declare function replicateGraphQL<RxDocType, CheckpointType>({ collection, url, headers, credentials, deletedField, waitForLeadership, pull, push, live, fetch: customFetch, retryTime, // in ms
-autoStart, replicationIdentifier }: SyncOptionsGraphQL<RxDocType, CheckpointType>): RxGraphQLReplicationState<RxDocType, CheckpointType>;
+autoStart, replicationIdentifier, toggleOnDocumentVisible, }: SyncOptionsGraphQL<RxDocType, CheckpointType>): RxGraphQLReplicationState<RxDocType, CheckpointType>;
 export * from './helper.ts';
 export * from './graphql-schema-from-rx-schema.ts';
 export * from './query-builder-from-rx-schema.ts';

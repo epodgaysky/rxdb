@@ -69,9 +69,9 @@ Object.keys(_queryBuilderFromRxSchema).forEach(function (key) {
  * you can use it to sync collections with a remote graphql endpoint.
  */
 var RxGraphQLReplicationState = exports.RxGraphQLReplicationState = /*#__PURE__*/function (_RxReplicationState) {
-  function RxGraphQLReplicationState(url, clientState, replicationIdentifier, collection, deletedField, pull, push, live, retryTime, autoStart, customFetch) {
+  function RxGraphQLReplicationState(url, clientState, replicationIdentifier, collection, deletedField, pull, push, live, retryTime, autoStart, customFetch, toggleOnDocumentVisible) {
     var _this;
-    _this = _RxReplicationState.call(this, replicationIdentifier, collection, deletedField, pull, push, live, retryTime, autoStart) || this;
+    _this = _RxReplicationState.call(this, replicationIdentifier, collection, deletedField, pull, push, live, retryTime, autoStart, toggleOnDocumentVisible) || this;
     _this.url = url;
     _this.clientState = clientState;
     _this.replicationIdentifier = replicationIdentifier;
@@ -83,6 +83,7 @@ var RxGraphQLReplicationState = exports.RxGraphQLReplicationState = /*#__PURE__*
     _this.retryTime = retryTime;
     _this.autoStart = autoStart;
     _this.customFetch = customFetch;
+    _this.toggleOnDocumentVisible = toggleOnDocumentVisible;
     return _this;
   }
   (0, _inheritsLoose2.default)(RxGraphQLReplicationState, _RxReplicationState);
@@ -112,7 +113,8 @@ function replicateGraphQL({
   retryTime = 1000 * 5,
   // in ms
   autoStart = true,
-  replicationIdentifier
+  replicationIdentifier,
+  toggleOnDocumentVisible
 }) {
   (0, _index4.addRxPlugin)(_index2.RxDBLeaderElectionPlugin);
   /**
@@ -169,7 +171,7 @@ function replicateGraphQL({
       modifier: push.modifier
     };
   }
-  var graphqlReplicationState = new RxGraphQLReplicationState(url, mutateableClientState, replicationIdentifier, collection, deletedField, replicationPrimitivesPull, replicationPrimitivesPush, live, retryTime, autoStart, customFetch);
+  var graphqlReplicationState = new RxGraphQLReplicationState(url, mutateableClientState, replicationIdentifier, collection, deletedField, replicationPrimitivesPull, replicationPrimitivesPush, live, retryTime, autoStart, customFetch, toggleOnDocumentVisible);
   var mustUseSocket = url.ws && pull && pull.streamQueryBuilder && live;
   var startBefore = graphqlReplicationState.start.bind(graphqlReplicationState);
   graphqlReplicationState.start = () => {
