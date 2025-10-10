@@ -94,6 +94,28 @@ var RxReplicationState = exports.RxReplicationState = /*#__PURE__*/function () {
       this.callOnStart = res;
     });
     this.startPromise = startPromise;
+    if (this.toggleOnDocumentVisible && typeof document !== 'undefined' && typeof document.addEventListener === 'function' && typeof document.visibilityState === 'string') {
+      var handler = () => {
+        if (this.isStopped()) {
+          return;
+        }
+        var isVisible = document.visibilityState === 'visible';
+        if (isVisible) {
+          this.start();
+        } else {
+          /**
+           * Only pause if not the current leader.
+           * If no tab is visible, the elected leader should still continue
+           * the replication.
+           */
+          if (!this.collection.database.isLeader()) {
+            this.pause();
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', handler);
+      this.onCancel.push(() => document.removeEventListener('visibilitychange', handler));
+    }
   }
   var _proto = RxReplicationState.prototype;
   _proto.start = function start() {
@@ -441,29 +463,6 @@ function replicateRxCollection({
     });
   }
   var replicationState = new RxReplicationState(replicationIdentifier, collection, deletedField, pull, push, live, retryTime, autoStart, toggleOnDocumentVisible);
-  console.log('REPLICATION CHECK: ', toggleOnDocumentVisible, typeof document !== 'undefined', typeof document.addEventListener === 'function', typeof document.visibilityState === 'string');
-  if (toggleOnDocumentVisible && typeof document !== 'undefined' && typeof document.addEventListener === 'function' && typeof document.visibilityState === 'string') {
-    var handler = () => {
-      if (replicationState.isStopped()) {
-        return;
-      }
-      var isVisible = document.visibilityState === 'visible';
-      if (isVisible) {
-        replicationState.start();
-      } else {
-        /**
-         * Only pause if not the current leader.
-         * If no tab is visible, the elected leader should still continue
-         * the replication.
-         */
-        if (!collection.database.isLeader()) {
-          replicationState.pause();
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handler);
-    replicationState.onCancel.push(() => document.removeEventListener('visibilitychange', handler));
-  }
   startReplicationOnLeaderShip(waitForLeadership, replicationState);
   return replicationState;
 }
