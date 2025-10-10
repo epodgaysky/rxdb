@@ -608,6 +608,7 @@ export function replicateRxCollection<RxDocType, CheckpointType>(
     );
 
 
+    console.log('REPLICATION CHECK: ',toggleOnDocumentVisible, typeof document !== 'undefined', typeof document.addEventListener === 'function', typeof document.visibilityState === 'string')
     if (
         toggleOnDocumentVisible &&
         typeof document !== 'undefined' &&

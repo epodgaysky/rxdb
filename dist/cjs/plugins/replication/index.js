@@ -441,6 +441,7 @@ function replicateRxCollection({
     });
   }
   var replicationState = new RxReplicationState(replicationIdentifier, collection, deletedField, pull, push, live, retryTime, autoStart, toggleOnDocumentVisible);
+  console.log('REPLICATION CHECK: ', toggleOnDocumentVisible, typeof document !== 'undefined', typeof document.addEventListener === 'function', typeof document.visibilityState === 'string');
   if (toggleOnDocumentVisible && typeof document !== 'undefined' && typeof document.addEventListener === 'function' && typeof document.visibilityState === 'string') {
     var handler = () => {
       if (replicationState.isStopped()) {
