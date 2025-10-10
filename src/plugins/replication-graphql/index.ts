@@ -53,7 +53,8 @@ export class RxGraphQLReplicationState<RxDocType, CheckpointType> extends RxRepl
         public readonly live?: boolean,
         public retryTime?: number,
         public autoStart?: boolean,
-        public readonly customFetch?: WindowOrWorkerGlobalScope['fetch']
+        public toggleOnDocumentVisible?: boolean,
+        public readonly customFetch?: WindowOrWorkerGlobalScope['fetch'],
     ) {
         super(
             replicationIdentifier,
@@ -63,7 +64,8 @@ export class RxGraphQLReplicationState<RxDocType, CheckpointType> extends RxRepl
             push,
             live,
             retryTime,
-            autoStart
+            autoStart,
+            toggleOnDocumentVisible
         );
     }
 
@@ -101,7 +103,8 @@ export function replicateGraphQL<RxDocType, CheckpointType>(
         fetch: customFetch,
         retryTime = 1000 * 5, // in ms
         autoStart = true,
-        replicationIdentifier
+        replicationIdentifier,
+        toggleOnDocumentVisible
     }: SyncOptionsGraphQL<RxDocType, CheckpointType>
 ): RxGraphQLReplicationState<RxDocType, CheckpointType> {
     addRxPlugin(RxDBLeaderElectionPlugin);
@@ -188,6 +191,7 @@ export function replicateGraphQL<RxDocType, CheckpointType>(
         live,
         retryTime,
         autoStart,
+        toggleOnDocumentVisible,
         customFetch
     );
 
