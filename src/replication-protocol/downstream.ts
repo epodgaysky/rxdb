@@ -356,6 +356,15 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                                 forkStateDocData,
                                 'downstream-check-if-equal-0'
                             );
+                        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save 1 comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
+                        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save 1 comparison conditionLine: ',
+                            !isAssumedMasterEqualToForkState,
+                            !!assumedMaster,
+                            !!(assumedMaster.docData as any)?._rev,
+                            !!forkStateFullDoc,
+                            !!forkStateFullDoc?._meta?.[state.input.identifier],
+                            !!(forkStateFullDoc?._rev && getHeightOfRevision(forkStateFullDoc._rev) === forkStateFullDoc?._meta?.[state.input.identifier])
+                        );
 
                         if (
                             !isAssumedMasterEqualToForkState &&
@@ -369,7 +378,7 @@ export async function startReplicationDownstream<RxDocType, CheckpointType = any
                         ) {
                             isAssumedMasterEqualToForkState = true;
                         }
-                        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
+                        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save 2 comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
                         if (
                             (
                                 forkStateFullDoc &&

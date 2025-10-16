@@ -223,10 +223,12 @@ async function startReplicationDownstream(state) {
             await state.streamQueue.up;
           }
           var isAssumedMasterEqualToForkState = !assumedMaster || !forkStateDocData ? false : state.input.conflictHandler.isEqual(assumedMaster.docData, forkStateDocData, 'downstream-check-if-equal-0');
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save 1 comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save 1 comparison conditionLine: ', !isAssumedMasterEqualToForkState, !!assumedMaster, !!assumedMaster.docData?._rev, !!forkStateFullDoc, !!forkStateFullDoc?._meta?.[state.input.identifier], !!(forkStateFullDoc?._rev && (0, _index.getHeightOfRevision)(forkStateFullDoc._rev) === forkStateFullDoc?._meta?.[state.input.identifier]));
           if (!isAssumedMasterEqualToForkState && assumedMaster && assumedMaster.docData._rev && forkStateFullDoc && forkStateFullDoc._meta[state.input.identifier] && (0, _index.getHeightOfRevision)(forkStateFullDoc._rev) === forkStateFullDoc._meta[state.input.identifier]) {
             isAssumedMasterEqualToForkState = true;
           }
-          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save 2 comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
           if (forkStateFullDoc && assumedMaster && isAssumedMasterEqualToForkState === false || forkStateFullDoc && !assumedMaster) {
             console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison result: IGNORE non-upstream-replicated');
             /**
