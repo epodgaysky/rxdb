@@ -221,16 +221,19 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
             let checkpoint: CheckpointType | undefined;
             while (openTasks.length > 0) {
                 const taskWithTime = ensureNotFalsy(openTasks.shift());
+                console.log('[RXDB_UPSTREAM] processTasks tasks: ', taskWithTime);
                 /**
                  * If the task came in before the last time the initial sync fetching
                  * has run, we can ignore the task because the initial sync already processed
                  * these documents.
                  */
                 if (taskWithTime.time < initialSyncStartTime) {
+                    console.log('[RXDB_UPSTREAM] processTasks skip task: ', taskWithTime);
                     continue;
                 }
 
                 if (taskWithTime.task === 'RESYNC') {
+                    console.log('[RXDB_UPSTREAM] processTasks RESYNC task: ', taskWithTime);
                     state.events.active.up.next(false);
                     await upstreamInitialSync();
                     return;
@@ -243,6 +246,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                  * to have the correct checkpoint set.
                  */
                 if (taskWithTime.task.context !== await state.downstreamBulkWriteFlag) {
+                    console.log('[RXDB_UPSTREAM] processTasks downstraem task: ', taskWithTime);
                     appendToArray(
                         docs,
                         taskWithTime.task.events.map(r => {
@@ -251,6 +255,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                     );
                 }
                 checkpoint = stackCheckpoints([checkpoint, taskWithTime.task.checkpoint]);
+                console.log('[RXDB_UPSTREAM] processTasks downstraem: ', checkpoint);
             }
 
             await persistToMaster(
@@ -285,16 +290,20 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
             nonPersistedFromMaster.docs[docId] = docData;
         });
         nonPersistedFromMaster.checkpoint = checkpoint;
+        console.log('[RXDB_UPSTREAM] persistToMaster nonPersistedFromMaster: ', nonPersistedFromMaster);
 
         persistenceQueue = persistenceQueue.then(async () => {
             if (state.events.canceled.getValue()) {
                 return false;
             }
 
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue start: ', nonPersistedFromMaster);
+
             const upDocsById: ById<RxDocumentData<RxDocType>> = nonPersistedFromMaster.docs;
             nonPersistedFromMaster.docs = {};
             const useCheckpoint = nonPersistedFromMaster.checkpoint;
             const docIds = Object.keys(upDocsById);
+
             /**
              * Even if we do not have anything to push,
              * we still have to store the up-checkpoint.
@@ -313,6 +322,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
 
 
             if (docIds.length === 0) {
+                console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue: rememberCheckpointBeforeReturn docsId.length is 0');
                 rememberCheckpointBeforeReturn();
                 return false;
             }
@@ -321,6 +331,8 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                 state,
                 docIds
             );
+
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue assumedMasterState: ', assumedMasterState);
 
             const writeRowsToMaster: ById<RxReplicationWriteToMasterRow<RxDocType>> = {};
             const writeRowsToMasterIds: string[] = [];
@@ -333,6 +345,26 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                     forkStateById[docId] = fullDocData;
                     const docData: WithDeleted<RxDocType> = writeDocToDocState(fullDocData, state.hasAttachments, !!state.input.keepMeta);
                     const assumedMasterDoc = assumedMasterState[docId];
+
+                    console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing docData: ', docData);
+                    console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing assumedMasterDoc: ', assumedMasterDoc);
+                    console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing isResolvedConflict correct: ', (
+                        assumedMasterDoc &&
+                        // if the isResolvedConflict is correct, we do not have to compare the documents.
+                        assumedMasterDoc.metaDocument.isResolvedConflict !== fullDocData._rev
+                        &&
+                        (
+                            state.input.conflictHandler.isEqual(
+                                assumedMasterDoc.docData,
+                                docData,
+                                'upstream-check-if-equal'
+                            )
+                        )
+                    ) || (
+                        assumedMasterDoc &&
+                        (assumedMasterDoc.docData as any)._rev &&
+                        getHeightOfRevision(fullDocData._rev) === fullDocData._meta[state.input.identifier]
+                    ));
 
                     /**
                      * If the master state is equal to the
@@ -383,6 +415,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
             );
 
             if (writeRowsToMasterIds.length === 0) {
+                console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing: rememberCheckpointBeforeReturn writeRowsToMasterIds.length is 0');
                 rememberCheckpointBeforeReturn();
                 return false;
             }
@@ -399,9 +432,11 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
              * called with more documents than what the batchSize limits.
              */
             const writeBatches = batchArray(writeRowsArray, state.input.pushBatchSize);
+
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing writeBatches: ', writeBatches);
+
             await Promise.all(
                 writeBatches.map(async (writeBatch) => {
-
                     // enhance docs with attachments
                     if (state.hasAttachments) {
                         await Promise.all(
@@ -424,6 +459,8 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                 })
             );
 
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflictsById: ', conflictsById);
+
             const useWriteRowsToMeta: BulkWriteRow<RxStorageReplicationMeta<RxDocType, any>>[] = [];
 
             writeRowsToMasterIds.forEach(docId => {
@@ -436,6 +473,8 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
             if (state.events.canceled.getValue()) {
                 return false;
             }
+
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing useWriteRowsToMeta: ', useWriteRowsToMeta);
 
             if (useWriteRowsToMeta.length > 0) {
                 await state.input.metaInstance.bulkWrite(
@@ -453,6 +492,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
              */
             let hadConflictWrites = false;
             if (conflictIds.size > 0) {
+                console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflicts: ', conflictsById);
                 state.stats.up.persistToMasterHadConflicts = state.stats.up.persistToMasterHadConflicts + 1;
                 const conflictWriteFork: BulkWriteRow<RxDocType>[] = [];
                 const conflictWriteMeta: BulkWriteRowById<RxStorageReplicationMeta<RxDocType, any>> = {};
@@ -466,11 +506,14 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                                 assumedMasterState: writeToMasterRow.assumedMasterState,
                                 realMasterState
                             };
+                            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflict writeToMasterRow: ', writeToMasterRow);
+                            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflict input: ', input);
                             return resolveConflictError(
                                 state,
                                 input,
                                 forkStateById[docId]
                             ).then(async (resolved) => {
+                                console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing resolved: ', resolved);
                                 if (resolved) {
                                     state.events.resolvedConflicts.next({
                                         input,
@@ -491,6 +534,8 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
                             });
                         })
                 );
+
+                console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflictWriteFork: ', conflictWriteFork);
 
                 if (conflictWriteFork.length > 0) {
                     hadConflictWrites = true;
@@ -551,6 +596,7 @@ export async function startReplicationUpstream<RxDocType, CheckpointType>(
              * but to ensure order on parallel checkpoint writes,
              * we have to use a queue.
              */
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing last rememberCheckpointBeforeReturn');
             rememberCheckpointBeforeReturn();
 
             return hadConflictWrites;

@@ -135,15 +135,18 @@ export async function startReplicationUpstream(state) {
       var checkpoint;
       while (openTasks.length > 0) {
         var taskWithTime = ensureNotFalsy(openTasks.shift());
+        console.log('[RXDB_UPSTREAM] processTasks tasks: ', taskWithTime);
         /**
          * If the task came in before the last time the initial sync fetching
          * has run, we can ignore the task because the initial sync already processed
          * these documents.
          */
         if (taskWithTime.time < initialSyncStartTime) {
+          console.log('[RXDB_UPSTREAM] processTasks skip task: ', taskWithTime);
           continue;
         }
         if (taskWithTime.task === 'RESYNC') {
+          console.log('[RXDB_UPSTREAM] processTasks RESYNC task: ', taskWithTime);
           state.events.active.up.next(false);
           await upstreamInitialSync();
           return;
@@ -156,11 +159,13 @@ export async function startReplicationUpstream(state) {
          * to have the correct checkpoint set.
          */
         if (taskWithTime.task.context !== (await state.downstreamBulkWriteFlag)) {
+          console.log('[RXDB_UPSTREAM] processTasks downstraem task: ', taskWithTime);
           appendToArray(docs, taskWithTime.task.events.map(r => {
             return r.documentData;
           }));
         }
         checkpoint = stackCheckpoints([checkpoint, taskWithTime.task.checkpoint]);
+        console.log('[RXDB_UPSTREAM] processTasks downstraem: ', checkpoint);
       }
       await persistToMaster(docs, checkpoint);
 
@@ -188,14 +193,17 @@ export async function startReplicationUpstream(state) {
       nonPersistedFromMaster.docs[docId] = docData;
     });
     nonPersistedFromMaster.checkpoint = checkpoint;
+    console.log('[RXDB_UPSTREAM] persistToMaster nonPersistedFromMaster: ', nonPersistedFromMaster);
     persistenceQueue = persistenceQueue.then(async () => {
       if (state.events.canceled.getValue()) {
         return false;
       }
+      console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue start: ', nonPersistedFromMaster);
       var upDocsById = nonPersistedFromMaster.docs;
       nonPersistedFromMaster.docs = {};
       var useCheckpoint = nonPersistedFromMaster.checkpoint;
       var docIds = Object.keys(upDocsById);
+
       /**
        * Even if we do not have anything to push,
        * we still have to store the up-checkpoint.
@@ -209,10 +217,12 @@ export async function startReplicationUpstream(state) {
       }
       ;
       if (docIds.length === 0) {
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue: rememberCheckpointBeforeReturn docsId.length is 0');
         rememberCheckpointBeforeReturn();
         return false;
       }
       var assumedMasterState = await getAssumedMasterState(state, docIds);
+      console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue assumedMasterState: ', assumedMasterState);
       var writeRowsToMaster = {};
       var writeRowsToMasterIds = [];
       var writeRowsToMeta = {};
@@ -222,6 +232,11 @@ export async function startReplicationUpstream(state) {
         forkStateById[docId] = fullDocData;
         var docData = writeDocToDocState(fullDocData, state.hasAttachments, !!state.input.keepMeta);
         var assumedMasterDoc = assumedMasterState[docId];
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing docData: ', docData);
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing assumedMasterDoc: ', assumedMasterDoc);
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing isResolvedConflict correct: ', assumedMasterDoc &&
+        // if the isResolvedConflict is correct, we do not have to compare the documents.
+        assumedMasterDoc.metaDocument.isResolvedConflict !== fullDocData._rev && state.input.conflictHandler.isEqual(assumedMasterDoc.docData, docData, 'upstream-check-if-equal') || assumedMasterDoc && assumedMasterDoc.docData._rev && getHeightOfRevision(fullDocData._rev) === fullDocData._meta[state.input.identifier]);
 
         /**
          * If the master state is equal to the
@@ -248,6 +263,7 @@ export async function startReplicationUpstream(state) {
         writeRowsToMeta[docId] = await getMetaWriteRow(state, docData, assumedMasterDoc ? assumedMasterDoc.metaDocument : undefined);
       }));
       if (writeRowsToMasterIds.length === 0) {
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing: rememberCheckpointBeforeReturn writeRowsToMasterIds.length is 0');
         rememberCheckpointBeforeReturn();
         return false;
       }
@@ -262,6 +278,7 @@ export async function startReplicationUpstream(state) {
        * called with more documents than what the batchSize limits.
        */
       var writeBatches = batchArray(writeRowsArray, state.input.pushBatchSize);
+      console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing writeBatches: ', writeBatches);
       await Promise.all(writeBatches.map(async writeBatch => {
         // enhance docs with attachments
         if (state.hasAttachments) {
@@ -276,6 +293,7 @@ export async function startReplicationUpstream(state) {
           conflictsById[id] = conflictDoc;
         });
       }));
+      console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflictsById: ', conflictsById);
       var useWriteRowsToMeta = [];
       writeRowsToMasterIds.forEach(docId => {
         if (!conflictIds.has(docId)) {
@@ -286,6 +304,7 @@ export async function startReplicationUpstream(state) {
       if (state.events.canceled.getValue()) {
         return false;
       }
+      console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing useWriteRowsToMeta: ', useWriteRowsToMeta);
       if (useWriteRowsToMeta.length > 0) {
         await state.input.metaInstance.bulkWrite(stripAttachmentsDataFromMetaWriteRows(state, useWriteRowsToMeta), 'replication-up-write-meta');
         // TODO what happens when we have conflicts here?
@@ -299,6 +318,7 @@ export async function startReplicationUpstream(state) {
        */
       var hadConflictWrites = false;
       if (conflictIds.size > 0) {
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflicts: ', conflictsById);
         state.stats.up.persistToMasterHadConflicts = state.stats.up.persistToMasterHadConflicts + 1;
         var conflictWriteFork = [];
         var conflictWriteMeta = {};
@@ -309,7 +329,10 @@ export async function startReplicationUpstream(state) {
             assumedMasterState: writeToMasterRow.assumedMasterState,
             realMasterState
           };
+          console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflict writeToMasterRow: ', writeToMasterRow);
+          console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflict input: ', input);
           return resolveConflictError(state, input, forkStateById[docId]).then(async resolved => {
+            console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing resolved: ', resolved);
             if (resolved) {
               state.events.resolvedConflicts.next({
                 input,
@@ -324,6 +347,7 @@ export async function startReplicationUpstream(state) {
             }
           });
         }));
+        console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing conflictWriteFork: ', conflictWriteFork);
         if (conflictWriteFork.length > 0) {
           hadConflictWrites = true;
           state.stats.up.persistToMasterConflictWrites = state.stats.up.persistToMasterConflictWrites + 1;
@@ -367,6 +391,7 @@ export async function startReplicationUpstream(state) {
        * but to ensure order on parallel checkpoint writes,
        * we have to use a queue.
        */
+      console.log('[RXDB_UPSTREAM] persistToMaster persistenceQueue processing last rememberCheckpointBeforeReturn');
       rememberCheckpointBeforeReturn();
       return hadConflictWrites;
     }).catch(unhandledError => {

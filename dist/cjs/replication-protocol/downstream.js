@@ -66,8 +66,10 @@ async function startReplicationDownstream(state) {
         return;
       }
       if (useTasks[0] === 'RESYNC') {
+        console.log('[RXDB_DOWNSTREAM] addNewTask tasks processing: RESYNC');
         return downstreamResyncOnce();
       } else {
+        console.log('[RXDB_DOWNSTREAM] addNewTask tasks processing: ', useTasks);
         return downstreamProcessChanges(useTasks);
       }
     }).then(() => {
@@ -93,6 +95,7 @@ async function startReplicationDownstream(state) {
       await (0, _rxjs.firstValueFrom)(state.events.active.up.pipe((0, _rxjs.filter)(s => !s)));
       return ev;
     })).subscribe(task => {
+      console.log('[RXDB_DOWNSTREAM] masterChangeStream$ new task: ', task);
       state.stats.down.masterChangeStreamEmit = state.stats.down.masterChangeStreamEmit + 1;
       addNewTask(task);
     });
@@ -137,6 +140,7 @@ async function startReplicationDownstream(state) {
     state.stats.down.downstreamProcessChanges = state.stats.down.downstreamProcessChanges + 1;
     var docsOfAllTasks = [];
     var lastCheckpoint = null;
+    console.log('[RXDB_DOWNSTREAM] downstreamProcessChanges: ', tasks);
     tasks.forEach(task => {
       if (task === 'RESYNC') {
         throw new Error('SNH');
@@ -160,6 +164,8 @@ async function startReplicationDownstream(state) {
     docs: {}
   };
   function persistFromMaster(docs, checkpoint) {
+    console.log('[RXDB_DOWNSTREAM] persistFromMaster start docs: ', docs);
+    console.log('[RXDB_DOWNSTREAM] persistFromMaster start checkpoint: ', checkpoint);
     var primaryPath = state.primaryPath;
     state.stats.down.persistFromMaster = state.stats.down.persistFromMaster + 1;
 
@@ -171,7 +177,7 @@ async function startReplicationDownstream(state) {
       nonPersistedFromMaster.docs[docId] = docData;
     });
     nonPersistedFromMaster.checkpoint = checkpoint;
-
+    console.log('[RXDB_DOWNSTREAM] persistFromMaster nonPersistedFromMaster: ', nonPersistedFromMaster);
     /**
      * Run in the queue
      * with all open documents from nonPersistedFromMaster.
@@ -181,6 +187,8 @@ async function startReplicationDownstream(state) {
       nonPersistedFromMaster.docs = {};
       var useCheckpoint = nonPersistedFromMaster.checkpoint;
       var docIds = Object.keys(downDocsById);
+      console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue docsIds: ', docIds);
+      console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue useCheckpoint: ', useCheckpoint);
       if (state.events.canceled.getValue() || docIds.length === 0) {
         return _index.PROMISE_RESOLVE_VOID;
       }
@@ -188,15 +196,24 @@ async function startReplicationDownstream(state) {
       var writeRowsToForkById = {};
       var writeRowsToMeta = {};
       var useMetaWriteRows = [];
+      console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save start');
       return Promise.all([state.input.forkInstance.findDocumentsById(docIds, true), (0, _metaInstance.getAssumedMasterState)(state, docIds)]).then(([currentForkStateList, assumedMasterState]) => {
         var currentForkState = new Map();
         currentForkStateList.forEach(doc => currentForkState.set(doc[primaryPath], doc));
+        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save currentForkStateList: ', currentForkStateList);
+        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save assumedMasterState: ', assumedMasterState);
+        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save currentForkStateList: ', currentForkStateList);
         return Promise.all(docIds.map(async docId => {
           var forkStateFullDoc = currentForkState.get(docId);
           var forkStateDocData = forkStateFullDoc ? (0, _helper.writeDocToDocState)(forkStateFullDoc, state.hasAttachments, false) : undefined;
           var masterState = downDocsById[docId];
           var assumedMaster = assumedMasterState[docId];
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison forkStateFullDoc: ', forkStateFullDoc);
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison forkStateDocData: ', forkStateDocData);
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison masterState: ', masterState);
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison assumedMaster: ', assumedMaster);
           if (assumedMaster && forkStateFullDoc && assumedMaster.metaDocument.isResolvedConflict === forkStateFullDoc._rev) {
+            console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison result: RESOLVED CONFLICT!');
             /**
              * The current fork state represents a resolved conflict
              * that first must be send to the master in the upstream.
@@ -209,7 +226,9 @@ async function startReplicationDownstream(state) {
           if (!isAssumedMasterEqualToForkState && assumedMaster && assumedMaster.docData._rev && forkStateFullDoc && forkStateFullDoc._meta[state.input.identifier] && (0, _index.getHeightOfRevision)(forkStateFullDoc._rev) === forkStateFullDoc._meta[state.input.identifier]) {
             isAssumedMasterEqualToForkState = true;
           }
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison isAssumedMasterEqualToForkState: ', isAssumedMasterEqualToForkState);
           if (forkStateFullDoc && assumedMaster && isAssumedMasterEqualToForkState === false || forkStateFullDoc && !assumedMaster) {
+            console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison result: IGNORE non-upstream-replicated');
             /**
              * We have a non-upstream-replicated
              * local write to the fork.
@@ -219,6 +238,7 @@ async function startReplicationDownstream(state) {
             return _index.PROMISE_RESOLVE_VOID;
           }
           var areStatesExactlyEqual = !forkStateDocData ? false : state.input.conflictHandler.isEqual(masterState, forkStateDocData, 'downstream-check-if-equal-1');
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison areStatesExactlyEqual: ', areStatesExactlyEqual);
           if (forkStateDocData && areStatesExactlyEqual) {
             /**
              * Document states are exactly equal.
@@ -229,7 +249,10 @@ async function startReplicationDownstream(state) {
              * we have to patch the document in the meta instance.
              */
             if (!assumedMaster || isAssumedMasterEqualToForkState === false) {
+              console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison result: EQUAL + META WRITE');
               useMetaWriteRows.push(await (0, _metaInstance.getMetaWriteRow)(state, forkStateDocData, assumedMaster ? assumedMaster.metaDocument : undefined));
+            } else {
+              console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison result: EQUAL');
             }
             return _index.PROMISE_RESOLVE_VOID;
           }
@@ -249,6 +272,8 @@ async function startReplicationDownstream(state) {
             _rev: (0, _index.getDefaultRevision)(),
             _attachments: state.hasAttachments && masterState._attachments ? masterState._attachments : {}
           });
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison newForkState: ', newForkState);
+
           /**
            * If the remote works with revisions,
            * we store the height of the next fork-state revision
@@ -272,14 +297,19 @@ async function startReplicationDownstream(state) {
             document: newForkState
           };
           forkWriteRow.document._rev = forkWriteRow.document._rev ? forkWriteRow.document._rev : (0, _index.createRevision)(identifierHash, forkWriteRow.previous);
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison forkWriteRow: ', forkWriteRow);
           writeRowsToFork.push(forkWriteRow);
           writeRowsToForkById[docId] = forkWriteRow;
           writeRowsToMeta[docId] = await (0, _metaInstance.getMetaWriteRow)(state, masterState, assumedMaster ? assumedMaster.metaDocument : undefined);
+          console.log("[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue save comparison writeRowsToMeta['" + docId + "']: ", writeRowsToMeta[docId]);
         }));
       }).then(async () => {
         if (writeRowsToFork.length > 0) {
+          console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue bulk write writeRowsToFork: ', writeRowsToFork);
           return state.input.forkInstance.bulkWrite(writeRowsToFork, await state.downstreamBulkWriteFlag).then(forkWriteResult => {
+            console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue bulk write forkWriteResult: ', forkWriteResult);
             var success = (0, _rxStorageHelper.getWrittenDocumentsFromBulkWriteResponse)(state.primaryPath, writeRowsToFork, forkWriteResult);
+            console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue bulk write success: ', success);
             success.forEach(doc => {
               var docId = doc[primaryPath];
               state.events.processed.down.next(writeRowsToForkById[docId]);
@@ -323,6 +353,7 @@ async function startReplicationDownstream(state) {
          * but to ensure order on parallel checkpoint writes,
          * we have to use a queue.
          */
+        console.log('[RXDB_DOWNSTREAM] persistFromMaster persistenceQueue setCheckpoint: ', useCheckpoint);
         (0, _checkpoint.setCheckpoint)(state, 'down', useCheckpoint);
       });
     }).catch(unhandledError => state.events.error.next(unhandledError));
